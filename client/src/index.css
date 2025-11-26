@@ -1,0 +1,78 @@
+/* client/src/index.css */
+/* Google font (optional) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+
+/* MUST have these for Tailwind to generate utilities */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- Theme variables ---------- */
+:root{
+  --bg-1: #060718;
+  --bg-2: #071033;
+  --accent-1: #60a5fa;
+  --accent-2: #7c3aed;
+  --accent-3: #6ee7b7;
+  --muted: #9aa4b2;
+  --glass: rgba(255,255,255,0.04);
+  --glass-strong: rgba(255,255,255,0.06);
+}
+
+/* base layout & font */
+html,body,#root { height:100%; font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+.app-root { background: radial-gradient(circle at 50% 40%, #07102a 0%, #040412 40%, #02030a 100%); min-height:100vh; color: #e6eef8; position:relative; }
+
+/* holo bg */
+.holo-wrap { position:absolute; inset:0; z-index:2; pointer-events:none; overflow:hidden; mix-blend-mode:screen; opacity:0.95; }
+.holo-rings { position:absolute; left:50%; top:50%; width:1100px; height:1100px; transform:translate(-50%,-45%); border-radius:50%; background: radial-gradient(circle, rgba(72,187,255,0.12) 0%, rgba(96,165,250,0.06) 25%, rgba(124,58,237,0.02) 60%, transparent 70%); filter: blur(48px) saturate(120%); animation:holoPulse 6s ease-in-out infinite; mix-blend-mode: screen; pointer-events:none; opacity:0.95; }
+
+/* brain svg visibility */
+.brain-svg { position:absolute; left:50%; top:38%; width:520px; height:520px; transform:translate(-50%,-50%) rotate(0deg); opacity:0.18; filter: drop-shadow(0 14px 45px rgba(60,120,255,0.08)); animation:brainSpin 20s linear infinite, brainFloat 6s ease-in-out infinite; z-index:2; }
+.brain-svg .particles circle { opacity:0.95; }
+
+/* header */
+.app-header { padding-top:28px; padding-bottom:8px; background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent); border-bottom:1px solid rgba(255,255,255,0.03); color:#eaf2ff; position:relative; z-index:20; }
+.app-header h1 { color:#eaf2ff; text-shadow: 0 6px 22px rgba(20,30,60,0.8); letter-spacing:-0.3px; }
+.app-header p { color: rgba(230,238,248,0.72); }
+
+/* logo */
+.logo-dot { width:46px; height:46px; border-radius:10px; background: linear-gradient(135deg,var(--accent-2),var(--accent-1) 60%, var(--accent-3)); box-shadow:0 8px 28px rgba(124,58,237,0.18), inset 0 -3px 12px rgba(0,0,0,0.25); }
+
+/* main layout */
+main { padding:28px; }
+form.w-full input, form.w-full textarea { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); color:#e8f2ff; border:1px solid rgba(255,255,255,0.06); padding:12px 14px; border-radius:12px; font-size:16px; outline:none; transition:box-shadow .18s, transform .12s, border-color .12s; box-shadow:0 2px 12px rgba(6,8,12,0.6) inset; }
+form.w-full input::placeholder { color: rgba(230,238,248,0.4); }
+form.w-full input:focus { border-color: rgba(96,165,250,0.95); box-shadow: 0 6px 30px rgba(96,165,250,0.06); transform: translateY(-1px); }
+
+/* intro + cards */
+.intro-card { backdrop-filter: blur(8px); background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.06); color:#eaf2ff; padding:16px; border-radius:12px; }
+.thought-card { background: linear-gradient(180deg, rgba(9,14,22,0.5), rgba(8,10,16,0.4)); border:1px solid rgba(255,255,255,0.06); box-shadow:0 10px 30px rgba(7,18,34,0.6); padding:16px; border-radius:16px; color:#eaf2ff; transition: transform .14s ease, box-shadow .14s ease; }
+.thought-card:hover { transform: translateY(-6px); box-shadow:0 18px 48px rgba(60,120,255,0.08); }
+.thought-card p, .thought-card .text-lg { color:#e9f4ff; font-weight:500; text-shadow:0 3px 12px rgba(0,0,0,0.6); }
+.thought-card .text-xs { color: rgba(230,238,248,0.6); }
+.thought-card button { color: rgba(230,238,248,0.92); background: transparent; border: none; cursor: pointer; }
+.thought-card button:hover { text-decoration: underline; }
+
+/* vignette */
+.bottom-vignette { position:absolute; left:0; right:0; bottom:-10%; height:48%; background:linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0.6)); pointer-events:none; z-index:10; }
+
+/* animations */
+@keyframes holoPulse { 0%{transform:translate(-50%,-45%) scale(0.98);opacity:0.9;}50%{transform:translate(-50%,-45%) scale(1.03);opacity:1;}100%{transform:translate(-50%,-45%) scale(0.98);opacity:0.9;} }
+@keyframes brainSpin { from{transform:translate(-50%,-50%) rotate(0deg);} to{transform:translate(-50%,-50%) rotate(360deg);} }
+@keyframes brainFloat { 0%{transform:translate(-50%,-50%) rotate(0deg) translateY(0px);}50%{transform:translate(-50%,-50%) rotate(6deg) translateY(-8px);}100%{transform:translate(-50%,-50%) rotate(0deg) translateY(0px);} }
+@keyframes particlePulse { 0%{transform:translateY(0) scale(1);opacity:0.9;}50%{transform:translateY(-3px) scale(1.2);opacity:1;}100%{transform:translateY(0) scale(1);opacity:0.9;} }
+
+/* recruiter polish (badge + card appear + footer) */
+.pulse-badge { display:inline-flex; align-items:center; gap:.5rem; padding:.28rem .6rem; border-radius:999px; background: linear-gradient(90deg, rgba(124,58,237,0.12), rgba(96,165,250,0.06)); color:#eaf2ff; font-weight:600; font-size:.85rem; box-shadow:0 6px 22px rgba(96,165,250,0.04); transform-origin:center; animation:badgeFloat 3.6s ease-in-out infinite; }
+.pulse-badge .pulse-dot { width:8px; height:8px; border-radius:999px; background: linear-gradient(135deg,#7c3aed,#60a5fa); box-shadow:0 6px 18px rgba(124,58,237,0.15); position:relative; }
+@keyframes badgeFloat { 0%{transform:translateY(0) scale(1);opacity:1;}50%{transform:translateY(-4px) scale(1.02);opacity:0.98;}100%{transform:translateY(0) scale(1);opacity:1;} }
+.tagline { font-size:.95rem; color: rgba(230,238,248,0.78); }
+.card-appear { animation: cardAppear .42s cubic-bezier(.2,.9,.28,1) both; will-change:transform,opacity,filter; }
+@keyframes cardAppear { 0%{transform:translateY(10px) scale(.995);opacity:0;filter:blur(6px);}60%{transform:translateY(-4px) scale(1.003);opacity:1;filter:blur(0);}100%{transform:translateY(0) scale(1);opacity:1;filter:blur(0);} }
+.built-footer { position:relative; z-index:30; margin-top:56px; border-top:1px solid rgba(255,255,255,0.02); background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent); backdrop-filter: blur(4px); }
+
+@media (max-width:1024px){ .brain-svg{ width:420px; height:420px; top:34%; opacity:0.14;} .holo-rings{ width:900px; height:900px; filter:blur(58px);} }
+@media (max-width:640px){ .brain-svg{ width:300px; height:300px; top:32%; opacity:0.16;} .holo-rings{ width:700px; height:700px; filter:blur(70px);} .pulse-badge{ display:none; } }
+
+
