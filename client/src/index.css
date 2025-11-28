@@ -75,4 +75,66 @@ form.w-full input:focus { border-color: rgba(96,165,250,0.95); box-shadow: 0 6px
 @media (max-width:1024px){ .brain-svg{ width:420px; height:420px; top:34%; opacity:0.14;} .holo-rings{ width:900px; height:900px; filter:blur(58px);} }
 @media (max-width:640px){ .brain-svg{ width:300px; height:300px; top:32%; opacity:0.16;} .holo-rings{ width:700px; height:700px; filter:blur(70px);} .pulse-badge{ display:none; } }
 
+/* --- Mind map view --- */
+.mindmap-container {
+  position: relative;
+  min-height: 420px;
+  padding: 40px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 10%, rgba(96,165,250,0.12), transparent 55%),
+    radial-gradient(circle at 0% 100%, rgba(110,231,183,0.12), transparent 55%),
+    radial-gradient(circle at 100% 100%, rgba(124,58,237,0.16), transparent 55%),
+    rgba(5,10,25,0.85);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 20px 50px rgba(3,8,23,0.9);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  overflow: hidden;
+}
 
+.mindmap-node {
+  max-width: 240px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(15,23,42,0.96), rgba(15,23,42,0.85));
+  border: 1px solid rgba(148,163,255,0.5);
+  box-shadow: 0 12px 30px rgba(15,23,42,0.8);
+  font-size: 0.86rem;
+  line-height: 1.35;
+  color: #e9f4ff;
+  position: relative;
+}
+
+/* subtle position offsets so nodes feel more "orbital" */
+.mindmap-node-1 { transform: translateY(-24px); }
+.mindmap-node-2 { transform: translate(30px, 10px); }
+.mindmap-node-3 { transform: translate(-24px, 14px); }
+.mindmap-node-4 { transform: translate(0, 28px); }
+.mindmap-node-5 { transform: translate(-18px, -8px); }
+.mindmap-node-6 { transform: translate(20px, -18px); }
+
+.mindmap-text {
+  text-shadow: 0 3px 10px rgba(0,0,0,0.6);
+}
+
+/* responsive tweaks */
+@media (max-width: 768px) {
+  .mindmap-container {
+    padding: 26px 18px;
+    min-height: 360px;
+  }
+  .mindmap-node {
+    max-width: 100%;
+    transform: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-header h1 {
+    font-size: 1.65rem;
+  }
+}
