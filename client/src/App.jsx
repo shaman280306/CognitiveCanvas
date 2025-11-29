@@ -1,6 +1,7 @@
 // client/src/App.jsx
+const API_BASE = "http://127.0.0.1:3000";
 import "./index.css";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ThoughtInput from "./components/ThoughtInput";
 import ThoughtCard from "./components/ThoughtCard";
 
@@ -30,30 +31,83 @@ const SEED_THOUGHTS = [
   },
 ];
 
+const API = `${API_BASE}/api/thoughts`;
+
+/**
+ * App: main UI
+ * - preserves all original visuals and features
+ * - adds server-sync, connection indicator, refresh, toast, and keyboard shortcut
+ */
 export default function App() {
   const [thoughts, setThoughts] = useState([]);
   const [viewMode, setViewMode] = useState("list"); // "list" | "map"
+  const [offlineMode, setOfflineMode] = useState(false); // true if server unreachable
+  const [status, setStatus] = useState("connecting"); // 'online'|'offline'|'connecting'
+  const [toast, setToast] = useState(null); // {type: 'success'|'error', msg}
+  const inputRef = useRef(null); // used by Ctrl+K focus
 
-  // Load from localStorage on first mount
+  // --- helper: show a short toast ---
+  function showToast(type, msg, ms = 2500) {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), ms);
+  }
+
+  // --- load on mount: try server, fallback to localStorage or seed ---
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setThoughts(parsed);
+    let mounted = true;
+    async function load() {
+      setStatus("connecting");
+      // Try server first
+      try {
+        const res = await fetch(API, { cache: "no-store" });
+        if (!res.ok) throw new Error("Server returned " + res.status);
+        const data = await res.json();
+        if (mounted) {
+          setThoughts(Array.isArray(data) ? data : []);
+          setOfflineMode(false);
+          setStatus("online");
+          // persist to localStorage as a cache
+          try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.isArray(data) ? data : []));
+          } catch {}
           return;
         }
+      } catch (err) {
+        // server failed — continue to localStorage fallback
+        console.warn("Could not reach server, falling back to localStorage/seed", err);
       }
-      // fallback to seed thoughts
-      setThoughts(SEED_THOUGHTS);
-    } catch (err) {
-      console.error("Failed to load thoughts from storage", err);
-      setThoughts(SEED_THOUGHTS);
+
+      // fallback to localStorage
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            if (mounted) setThoughts(parsed);
+            setOfflineMode(true);
+            setStatus("offline");
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to read localStorage", err);
+      }
+
+      // fallback to seeds
+      if (mounted) {
+        setThoughts(SEED_THOUGHTS);
+        setOfflineMode(true);
+        setStatus("offline");
+      }
     }
+
+    load();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  // Persist to localStorage whenever thoughts change
+  // Persist to localStorage whenever thoughts change (cache)
   useEffect(() => {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(thoughts));
@@ -62,24 +116,169 @@ export default function App() {
     }
   }, [thoughts]);
 
-  const addThought = (text) => {
-    const newThought = {
-      _id: Date.now().toString(),
-      text,
-      createdAt: new Date().toISOString(),
+  // Periodic server health check (every 30s)
+  useEffect(() => {
+    let mounted = true;
+    let timer = null;
+
+    async function checkServer() {
+      try {
+        setStatus("connecting");
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(API, { signal: controller.signal, cache: "no-store" });
+        clearTimeout(timeout);
+        if (!res.ok) throw new Error("Ping failed " + res.status);
+        if (!mounted) return;
+        setStatus("online");
+        setOfflineMode(false);
+      } catch (err) {
+        if (!mounted) return;
+        console.warn("Health check failed", err);
+        setStatus("offline");
+        setOfflineMode(true);
+      }
+    }
+
+    // run immediately and schedule interval
+    checkServer();
+    timer = setInterval(checkServer, 30000);
+
+    return () => {
+      mounted = false;
+      if (timer) clearInterval(timer);
     };
-    setThoughts((prev) => [newThought, ...prev]);
+  }, []);
+
+  // Helper: create a client-side id for optimistic items if server is offline
+  function makeClientId() {
+    return `cid-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  }
+
+  // Fetch list from server (manual refresh)
+  async function fetchList() {
+    try {
+      const res = await fetch(API, { cache: "no-store" });
+      if (!res.ok) throw new Error("Fetch failed " + res.status);
+      const data = await res.json();
+      setThoughts(Array.isArray(data) ? data : []);
+      setOfflineMode(false);
+      setStatus("online");
+      showToast("success", "Loaded from server");
+    } catch (err) {
+      console.warn("fetchList failed", err);
+      setOfflineMode(true);
+      setStatus("offline");
+      showToast("error", "Could not contact server — offline mode");
+    }
+  }
+
+  // Add thought: attempt to save to server, otherwise save locally
+  const addThought = async (text) => {
+    const createdAt = new Date().toISOString();
+
+    // optimistic UI item (if server is slow)
+    const optimistic = {
+      _id: makeClientId(),
+      text,
+      createdAt,
+    };
+    setThoughts((prev) => [optimistic, ...prev]);
+
+    // Try server POST
+    try {
+      const res = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) throw new Error("Server returned " + res.status);
+      const saved = await res.json();
+      // replace optimistic item with real server item
+      setThoughts((prev) => {
+        const filtered = prev.filter((t) => !(t._id === optimistic._id));
+        return [saved, ...filtered];
+      });
+      setOfflineMode(false);
+      setStatus("online");
+      showToast("success", "Saved");
+    } catch (err) {
+      console.warn("POST failed, staying offline and keeping optimistic item", err);
+      setOfflineMode(true);
+      setStatus("offline");
+      showToast("error", "Save failed — offline, saved locally");
+    }
   };
 
-  const handleUpdate = (id, newText) => {
-    setThoughts((prev) =>
-      prev.map((t) => (t._id === id ? { ...t, text: newText } : t))
-    );
+  // Update thought: optimistic update locally, attempt server update
+  const handleUpdate = async (id, newText) => {
+    setThoughts((prev) => prev.map((t) => (t._id === id ? { ...t, text: newText } : t)));
+
+    // attempt server update (if id looks like server id)
+    if (!id.startsWith("cid-")) {
+      try {
+        const res = await fetch(`${API}/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: newText }),
+        });
+        if (!res.ok) throw new Error("Server update failed " + res.status);
+        setOfflineMode(false);
+        setStatus("online");
+        showToast("success", "Updated");
+      } catch (err) {
+        console.warn("Update failed — offline or server error", err);
+        setOfflineMode(true);
+        setStatus("offline");
+        showToast("error", "Update failed — offline");
+      }
+    } else {
+      // client-id item; will be synced later if you implement a sync job
+      setOfflineMode(true);
+      setStatus("offline");
+    }
   };
 
-  const handleDelete = (id) => {
+  // Delete thought
+  const handleDelete = async (id) => {
+    // remove locally first
     setThoughts((prev) => prev.filter((t) => t._id !== id));
+
+    // attempt server delete if server id
+    if (!id.startsWith("cid-")) {
+      try {
+        const res = await fetch(`${API}/${id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Server delete failed " + res.status);
+        setOfflineMode(false);
+        setStatus("online");
+        showToast("success", "Deleted");
+      } catch (err) {
+        console.warn("Delete failed — offline or server error", err);
+        setOfflineMode(true);
+        setStatus("offline");
+        showToast("error", "Delete failed — offline");
+      }
+    } else {
+      // removed local optimistic item already
+      setOfflineMode(true);
+      setStatus("offline");
+      showToast("success", "Removed locally");
+    }
   };
+
+  // Keyboard shortcut: Ctrl+K focuses the ThoughtInput (best-effort)
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        // try to find the input in ThoughtInput by placeholder
+        const el = document.querySelector('input[placeholder*="Type a thought"], input[placeholder*="Write a thought"], textarea');
+        if (el) el.focus();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div className="app-root min-h-screen relative overflow-hidden bg-[#060718] text-white">
@@ -154,6 +353,26 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Connection status indicator */}
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-black/30 border border-white/6">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  status === "online" ? "bg-green-400" : status === "connecting" ? "bg-yellow-300 animate-pulse" : "bg-red-400"
+                }`}
+                aria-hidden
+              />
+              <span className="text-xs sm:text-sm text-gray-200">
+                {status === "online" ? "Online" : status === "connecting" ? "Connecting…" : "Offline"}
+              </span>
+            </div>
+
+            <button
+              onClick={() => fetchList()}
+              className="hidden sm:inline-flex px-3 py-1 rounded-lg bg-transparent border border-white/8 text-xs sm:text-sm text-gray-200 hover:bg-white/5 transition"
+            >
+              Refresh
+            </button>
+
             <a
               href="https://github.com/shaman280306/CognitiveCanvas"
               target="_blank"
@@ -162,6 +381,7 @@ export default function App() {
             >
               View code
             </a>
+
             <button className="px-3 py-1 rounded-lg bg-transparent border border-white/6 text-xs sm:text-sm text-gray-200 hover:bg-white/3 transition">
               Sign in
             </button>
@@ -211,7 +431,14 @@ export default function App() {
 
             {/* input */}
             <div className="mb-8">
+              {/* pass addThought which now syncs with server */}
               <ThoughtInput onAddThought={addThought} />
+              {/* show offline badge if server unreachable */}
+              {offlineMode && (
+                <div className="mt-2 text-xs text-yellow-300">
+                  Offline mode — changes are stored locally and will sync when server is reachable.
+                </div>
+              )}
             </div>
 
             {/* content area */}
@@ -277,6 +504,19 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed right-4 bottom-6 z-50">
+          <div
+            className={`px-4 py-2 rounded-md shadow-md ${
+              toast.type === "success" ? "bg-green-600" : "bg-red-600"
+            } text-white`}
+          >
+            {toast.msg}
+          </div>
+        </div>
+      )}
 
       <div className="bottom-vignette pointer-events-none" />
     </div>

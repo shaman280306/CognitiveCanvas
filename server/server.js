@@ -1,79 +1,61 @@
-// server/server.js
+/* server/server.js — binds to 0.0.0.0 for IPv4 accessibility */
 
-// --- 1. Dependencies ---
+import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
-import cors from 'cors'; // Required for connecting from the React client
+import cors from 'cors';
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+const HOST = '0.0.0.0';
 
-// --- 2. Middleware ---
-// Enable CORS for the client running on a different port (e.g., 5173)
+// Middleware
 const corsOptions = {
-    origin: 'http://localhost:5173', // Adjust if your client port changes
+    origin: 'http://localhost:5173',
     optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
-app.use(express.json()); // Body parser for application/json
+app.use(express.json());
 
-// --- 3. MongoDB Connection ---
-// !!! IMPORTANT: REPLACE THIS WITH YOUR ACTUAL MONGODB CONNECTION STRING !!!
-const MONGO_URI = 'mongodb://localhost:27017/cognitive_canvas_db'; 
-// Example Atlas URI: 'mongodb+srv://user:password@clustername.mongodb.net/cognitive_canvas_db?retryWrites=true&w=majority'
+// DB
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/cognitive_canvas_db';
+console.log('Using MONGO_URI startsWith:', typeof MONGO_URI === 'string' ? MONGO_URI.slice(0, 60) : MONGO_URI);
 
-mongoose.connect(MONGO_URI)
-    .then(() => {
-        console.log('MongoDB connection successful.');
-    })
-    .catch(err => {
-        console.error('MongoDB connection error:', err.message);
-        // Exit process with failure
-        process.exit(1); 
-    });
-
-// --- 4. Mongoose Schema and Model ---
-const thoughtSchema = new mongoose.Schema({
-    text: { 
-        type: String, 
-        required: true,
-        trim: true
-    },
-    // The position property will be used later for Mind-Map POC
-    x: { type: Number, default: 0 },
-    y: { type: Number, default: 0 },
-    createdAt: { 
-        type: Date, 
-        default: Date.now 
-    }
+mongoose.connect(MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+})
+.then(() => console.log('MongoDB connection successful ?'))
+.catch(err => {
+    console.error('MongoDB connection error:', err.message || err);
+    console.error('Server will keep running but DB ops will fail until connection is fixed.');
 });
 
+// Schema + Model
+const thoughtSchema = new mongoose.Schema({
+    text: { type: String, required: true, trim: true },
+    x: { type: Number, default: 0 },
+    y: { type: Number, default: 0 },
+    createdAt: { type: Date, default: Date.now }
+});
 const Thought = mongoose.model('Thought', thoughtSchema);
 
-// --- 5. REST API Endpoints (Routes) ---
-
-// POST /api/thoughts (CREATE)
+// Routes
 app.post('/api/thoughts', async (req, res) => {
     try {
         const { text } = req.body;
-        if (!text || text.trim() === '') {
-            return res.status(400).json({ message: 'Thought text is required.' });
-        }
-        
+        if (!text || text.trim() === '') return res.status(400).json({ message: 'Thought text is required.' });
         const newThought = new Thought({ text });
         await newThought.save();
-        
-        res.status(201).json(newThought); 
+        res.status(201).json(newThought);
     } catch (error) {
         console.error('Error creating thought:', error);
         res.status(500).json({ message: 'Server error: Could not save thought.' });
     }
 });
 
-// GET /api/thoughts (READ ALL)
 app.get('/api/thoughts', async (req, res) => {
     try {
-        // Fetch all thoughts, sort by creation date descending
         const thoughts = await Thought.find().sort({ createdAt: -1 });
         res.status(200).json(thoughts);
     } catch (error) {
@@ -82,29 +64,15 @@ app.get('/api/thoughts', async (req, res) => {
     }
 });
 
-// PUT /api/thoughts/:id (UPDATE)
 app.put('/api/thoughts/:id', async (req, res) => {
     try {
         const { text } = req.body;
         const thoughtId = req.params.id;
+        if (!mongoose.Types.ObjectId.isValid(thoughtId)) return res.status(400).json({ message: 'Invalid Thought ID.' });
+        if (!text || text.trim() === '') return res.status(400).json({ message: 'Thought text is required for update.' });
 
-        if (!mongoose.Types.ObjectId.isValid(thoughtId)) {
-            return res.status(400).json({ message: 'Invalid Thought ID.' });
-        }
-        if (!text || text.trim() === '') {
-            return res.status(400).json({ message: 'Thought text is required for update.' });
-        }
-        
-        const updatedThought = await Thought.findByIdAndUpdate(
-            thoughtId,
-            { text },
-            { new: true, runValidators: true } // {new: true} returns the updated document
-        );
-
-        if (!updatedThought) {
-            return res.status(404).json({ message: 'Thought not found.' });
-        }
-        
+        const updatedThought = await Thought.findByIdAndUpdate(thoughtId, { text }, { new: true, runValidators: true });
+        if (!updatedThought) return res.status(404).json({ message: 'Thought not found.' });
         res.status(200).json(updatedThought);
     } catch (error) {
         console.error('Error updating thought:', error);
@@ -112,22 +80,13 @@ app.put('/api/thoughts/:id', async (req, res) => {
     }
 });
 
-// DELETE /api/thoughts/:id (DELETE)
 app.delete('/api/thoughts/:id', async (req, res) => {
     try {
         const thoughtId = req.params.id;
+        if (!mongoose.Types.ObjectId.isValid(thoughtId)) return res.status(400).json({ message: 'Invalid Thought ID.' });
 
-        if (!mongoose.Types.ObjectId.isValid(thoughtId)) {
-            return res.status(400).json({ message: 'Invalid Thought ID.' });
-        }
-        
         const deletedThought = await Thought.findByIdAndDelete(thoughtId);
-
-        if (!deletedThought) {
-            return res.status(404).json({ message: 'Thought not found.' });
-        }
-        
-        // Respond with the ID of the deleted item
+        if (!deletedThought) return res.status(404).json({ message: 'Thought not found.' });
         res.status(200).json({ _id: thoughtId, message: 'Thought deleted successfully.' });
     } catch (error) {
         console.error('Error deleting thought:', error);
@@ -135,9 +94,8 @@ app.delete('/api/thoughts/:id', async (req, res) => {
     }
 });
 
-
-// --- 6. Server Initialization ---
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-    console.log(`Client will connect to this server from http://localhost:5173`);
+// Server init — bind to IPv4 0.0.0.0
+app.listen(PORT, HOST, () => {
+    console.log(`Server is running on http://${HOST}:${PORT}`);
+    console.log('Client will connect to this server from http://localhost:5173');
 });
